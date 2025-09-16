@@ -277,6 +277,60 @@ def sentiment_analysis_tab():
         except Exception as e:
             st.error(f"An error occurred: {str(e)}")
 
+# =============================================
+# ENHANCED CHATBOT TAB
+# =============================================
+
+from sentence_transformers import SentenceTransformer, util
+
+def chatbot_tab():
+    st.header("💬 Insurance Chatbot")
+    st.write("Ask me anything about insurance policies, claims, or terms!")
+
+    # Load dataset
+    df = pd.read_csv("E:\Final_Project\insurance\Scripts\insurance_faq.csv")
+    questions = df["question"].tolist()
+    answers = df["answer"].tolist()
+
+    # Load embedding model once (cached for performance)
+    @st.cache_resource
+    def load_model():
+        return SentenceTransformer("all-MiniLM-L6-v2")
+
+    model = load_model()
+
+    # Precompute embeddings
+    @st.cache_resource
+    def embed_questions():
+        return model.encode(questions, convert_to_tensor=True)
+    
+    question_embeddings = embed_questions()
+
+    # Keep conversation history in session state
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+
+    # Chat input
+    user_input = st.text_input("You:", key="chat_input")
+
+    if st.button("Send") and user_input:
+        # Find best match
+        user_embedding = model.encode(user_input, convert_to_tensor=True)
+        scores = util.pytorch_cos_sim(user_embedding, question_embeddings)[0]
+        best_match_idx = int(scores.argmax())
+        bot_reply = answers[best_match_idx]
+
+        # Save to history
+        st.session_state.chat_history.append(("You", user_input))
+        st.session_state.chat_history.append(("Bot", bot_reply))
+
+    # Display chat history as bubbles
+    for speaker, msg in st.session_state.chat_history:
+        if speaker == "You":
+            st.markdown(f"<div style='text-align:right; background:#d1ecf1; padding:8px; border-radius:10px; margin:5px;'><b>{speaker}:</b> {msg}</div>", unsafe_allow_html=True)
+        else:
+            st.markdown(f"<div style='text-align:left; background:#f8d7da; padding:8px; border-radius:10px; margin:5px;'><b>{speaker}:</b> {msg}</div>", unsafe_allow_html=True)
+
 
 
 # =============================================
@@ -296,7 +350,8 @@ def main():
     tabs = st.tabs([
         "🔮 Risk Prediction",
         "🕵️ Fraud Detection",
-        "😊 Sentiment Analysis"
+        "😊 Sentiment Analysis",
+        "💬 Chatbot"
     ])
     
     # Render tabs
@@ -309,6 +364,9 @@ def main():
     with tabs[2]:
         sentiment_analysis_tab()
 
+    with tabs[3]:
+        chatbot_tab()
+
 
     # Sidebar
     with st.sidebar:
@@ -319,6 +377,7 @@ def main():
         st.write("-🔮 Risk prediction")
         st.write("-🕵️ Fraud detection")
         st.write("-😊 Sentiment analysis")
+        st.write("-💬 Interactive chatbot")
         st.markdown("---")
         
 if __name__ == "__main__":
